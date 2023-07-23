@@ -61,7 +61,7 @@ class _$AppDatabase extends AppDatabase {
     changeListener = listener ?? StreamController<String>.broadcast();
   }
 
-  TaskDao? _taskDaoInstance;
+  Dao? _daoInstance;
 
   Future<sqflite.Database> open(
     String path,
@@ -85,7 +85,7 @@ class _$AppDatabase extends AppDatabase {
       },
       onCreate: (database, version) async {
         await database.execute(
-            'CREATE TABLE IF NOT EXISTS `Task` (`id` INTEGER NOT NULL, `title` TEXT, `description` TEXT, `startDate` INTEGER, `endDate` INTEGER, `reopenDate` INTEGER, `isOpen` INTEGER, `isFollowUp` INTEGER, `followUpId` INTEGER NOT NULL, `priority` INTEGER NOT NULL, PRIMARY KEY (`id`))');
+            'CREATE TABLE IF NOT EXISTS `Task` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `title` TEXT NOT NULL, `description` TEXT, `startDate` INTEGER NOT NULL, `endDate` INTEGER, `reopenDate` INTEGER, `isOpen` INTEGER, `isFollowUp` INTEGER, `followUpId` INTEGER, `priority` INTEGER NOT NULL)');
 
         await callback?.onCreate?.call(database, version);
       },
@@ -94,16 +94,34 @@ class _$AppDatabase extends AppDatabase {
   }
 
   @override
-  TaskDao get taskDao {
-    return _taskDaoInstance ??= _$TaskDao(database, changeListener);
+  Dao get dao {
+    return _daoInstance ??= _$Dao(database, changeListener);
   }
 }
 
-class _$TaskDao extends TaskDao {
-  _$TaskDao(
+class _$Dao extends Dao {
+  _$Dao(
     this.database,
     this.changeListener,
-  ) : _queryAdapter = QueryAdapter(database, changeListener);
+  )   : _queryAdapter = QueryAdapter(database, changeListener),
+        _taskInsertionAdapter = InsertionAdapter(
+            database,
+            'Task',
+            (Task item) => <String, Object?>{
+                  'id': item.id,
+                  'title': item.title,
+                  'description': item.description,
+                  'startDate': item.startDate,
+                  'endDate': item.endDate,
+                  'reopenDate': item.reopenDate,
+                  'isOpen': item.isOpen == null ? null : (item.isOpen! ? 1 : 0),
+                  'isFollowUp': item.isFollowUp == null
+                      ? null
+                      : (item.isFollowUp! ? 1 : 0),
+                  'followUpId': item.followUpId,
+                  'priority': item.priority
+                },
+            changeListener);
 
   final sqflite.DatabaseExecutor database;
 
@@ -111,38 +129,71 @@ class _$TaskDao extends TaskDao {
 
   final QueryAdapter _queryAdapter;
 
+  final InsertionAdapter<Task> _taskInsertionAdapter;
+
   @override
-  Future<List<Task>> getAllTodo() async {
-    return _queryAdapter.queryList('Select * FROM TodoRecord',
+  Future<List<Task>> getAllTask() async {
+    return _queryAdapter.queryList('Select * FROM Task',
         mapper: (Map<String, Object?> row) => Task(
-            row['id'] as int,
-            row['title'] as String?,
-            row['description'] as String?,
-            row['startDate'] as int?,
-            row['endDate'] as int?,
-            row['reopenDate'] as int?,
-            row['isOpen'] == null ? null : (row['isOpen'] as int) != 0,
-            row['isFollowUp'] == null ? null : (row['isFollowUp'] as int) != 0,
-            row['followUpId'] as int,
-            row['priority'] as int));
+            id: row['id'] as int?,
+            title: row['title'] as String,
+            description: row['description'] as String?,
+            startDate: row['startDate'] as int,
+            endDate: row['endDate'] as int?,
+            reopenDate: row['reopenDate'] as int?,
+            isOpen: row['isOpen'] == null ? null : (row['isOpen'] as int) != 0,
+            isFollowUp: row['isFollowUp'] == null
+                ? null
+                : (row['isFollowUp'] as int) != 0,
+            followUpId: row['followUpId'] as int?,
+            priority: row['priority'] as int));
   }
 
   @override
-  Stream<Task?> findTodoById(int id) {
-    return _queryAdapter.queryStream('Select * From TodoRecord WHERE id = ?1',
+  Stream<List<Task?>> getRelevantTaskForToday(int currDate) {
+    return _queryAdapter.queryListStream(
+        'SELECT * FROM Task WHERE date(datetime(startDate, \"unixepoch\")) <= date(datetime(?1, \"unixepoch\")) AND (endDate IS NULL OR date(datetime(endDate, \"unixepoch\")) = date(datetime(?1, \"unixepoch\")))',
         mapper: (Map<String, Object?> row) => Task(
-            row['id'] as int,
-            row['title'] as String?,
-            row['description'] as String?,
-            row['startDate'] as int?,
-            row['endDate'] as int?,
-            row['reopenDate'] as int?,
-            row['isOpen'] == null ? null : (row['isOpen'] as int) != 0,
-            row['isFollowUp'] == null ? null : (row['isFollowUp'] as int) != 0,
-            row['followUpId'] as int,
-            row['priority'] as int),
-        arguments: [id],
-        queryableName: 'TodoRecord',
+            id: row['id'] as int?,
+            title: row['title'] as String,
+            description: row['description'] as String?,
+            startDate: row['startDate'] as int,
+            endDate: row['endDate'] as int?,
+            reopenDate: row['reopenDate'] as int?,
+            isOpen: row['isOpen'] == null ? null : (row['isOpen'] as int) != 0,
+            isFollowUp: row['isFollowUp'] == null
+                ? null
+                : (row['isFollowUp'] as int) != 0,
+            followUpId: row['followUpId'] as int?,
+            priority: row['priority'] as int),
+        arguments: [currDate],
+        queryableName: 'Task',
         isView: false);
+  }
+
+  @override
+  Stream<Task?> getTaskById(int id) {
+    return _queryAdapter.queryStream('Select * From Task WHERE id = ?1',
+        mapper: (Map<String, Object?> row) => Task(
+            id: row['id'] as int?,
+            title: row['title'] as String,
+            description: row['description'] as String?,
+            startDate: row['startDate'] as int,
+            endDate: row['endDate'] as int?,
+            reopenDate: row['reopenDate'] as int?,
+            isOpen: row['isOpen'] == null ? null : (row['isOpen'] as int) != 0,
+            isFollowUp: row['isFollowUp'] == null
+                ? null
+                : (row['isFollowUp'] as int) != 0,
+            followUpId: row['followUpId'] as int?,
+            priority: row['priority'] as int),
+        arguments: [id],
+        queryableName: 'Task',
+        isView: false);
+  }
+
+  @override
+  Future<void> insertTask(Task task) async {
+    await _taskInsertionAdapter.insert(task, OnConflictStrategy.abort);
   }
 }
