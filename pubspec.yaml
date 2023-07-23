@@ -37,6 +37,8 @@ dependencies:
   cupertino_icons: ^1.0.2
   floor: ^1.4.2
   floor_generator: ^1.4.2
+  flutter_speed_dial: ^7.0.0
+  get_it: ^7.6.0
 
 dev_dependencies:
   flutter_test:
