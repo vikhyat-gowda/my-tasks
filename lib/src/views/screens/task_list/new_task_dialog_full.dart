@@ -80,7 +80,6 @@ class _NewTaskDialogFullState extends State<NewTaskDialogFull> {
                   },
                 ),
               ),
-
             ],
           ),
         ),

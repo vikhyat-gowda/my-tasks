@@ -17,6 +17,8 @@ class Task {
   final bool? isFollowUp;
   final int? followUpId;
   final int priority;
+  final bool? isRepetitive;
+  final int? repetitiveId;
 
   const Task({
     this.id,
@@ -29,5 +31,7 @@ class Task {
     this.isFollowUp,
     this.followUpId,
     required this.priority,
+    this.isRepetitive,
+    this.repetitiveId,
   });
 }

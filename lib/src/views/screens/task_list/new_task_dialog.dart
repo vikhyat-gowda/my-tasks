@@ -5,8 +5,14 @@ import 'package:my_tasks/src/data/dao.dart';
 import 'package:my_tasks/src/data/entities/task.dart';
 
 class NewTaskDialog extends StatefulWidget {
-  const NewTaskDialog({super.key});
+  const NewTaskDialog({
+    super.key,
+    required this.isEdit,
+    this.taskId,
+  });
 
+  final int? taskId;
+  final bool isEdit;
 
   @override
   State<NewTaskDialog> createState() => _NewTaskDialogState();
@@ -17,13 +23,30 @@ class _NewTaskDialogState extends State<NewTaskDialog> {
   final descriptionController = TextEditingController();
   int selectedPriorityIndex = 0;
   late final Dao dao;
-
+  late final Task? currTask;
   final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
     super.initState();
     dao = GetIt.I.get<Dao>();
+    if (widget.isEdit) {
+      dao.getTaskById(widget.taskId!).then(
+        (task) {
+          if (task != null) {
+            setState(
+              () {
+                currTask = task;
+                titleController.text = task.title;
+                if(task.description != null) {
+                  descriptionController.text = task.description!;
+                } selectedPriorityIndex = task.priority;
+              },
+            );
+          }
+        },
+      );
+    }
   }
 
   @override
@@ -45,7 +68,7 @@ class _NewTaskDialogState extends State<NewTaskDialog> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Create new task for today',
+              Text(widget.isEdit == true ? 'Edit Task' : 'Create new task for today',
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 20),
               TextFormField(
@@ -104,15 +127,20 @@ class _NewTaskDialogState extends State<NewTaskDialog> {
                   FilledButton(
                       onPressed: () {
                         if (_formKey.currentState!.validate()) {
-                         dao.insertTask(
+                          DateTime now = DateTime.now();
+                          dao.upsertTask(
                             Task(
+                              id: widget.isEdit == true ? widget.taskId : null,
                               title: titleController.text,
                               description: descriptionController.text,
-                              priority: priorityList[selectedPriorityIndex].val,
-                              startDate: DateTime.now().microsecondsSinceEpoch,
+                              priority: selectedPriorityIndex,
+                              startDate: DateTime(now.year, now.month, now.day)
+                                  .microsecondsSinceEpoch,
+                              endDate: widget.isEdit == true ? currTask?.endDate : null
                             ),
                           );
                         }
+                        Navigator.pop(context);
                       },
                       child: const Text("ADD")),
                 ],
